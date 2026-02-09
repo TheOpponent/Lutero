@@ -1,6 +1,8 @@
 [reader]
-# Set to the COM port number of the reader.
-com_port = 10
+# Set to the COM port number of the reader. Set to 0 to auto detect. Auto 
+# detection is not guaranteed to work and may cause the program to freeze on
+# startup, in which case the actual port number must be provided.
+com_port = 0
 
 # Set to the NFC chipset of the reader. nfcpy currently supports these drivers:
 # rcs380, pn531, pn532, pn533, rcs956, acr122
@@ -11,8 +13,8 @@ driver = "pn532"
 remove_timeout = 3
 
 # Set to true to write the IDs of scanned tags not in the tag_commands list
-# to new_tags.txt when the program exits with Ctrl-C. If this file cannot be
-# written, the IDs will be written to the console before exiting.
+# to new_tags.txt as they are scanned. If this file cannot be written, the
+# IDs will be written to the console before exiting.
 log_new_tags = true
 
 [tag_commands]

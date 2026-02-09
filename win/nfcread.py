@@ -25,17 +25,29 @@ class NFCConfig:
 
 def connect_nfc_reader(nfc_config: NFCConfig):
     serial_error_message = False
-    while True:
-        try:
-            nfc_config.clf.open(f"com:{nfc_config.com_port}:{nfc_config.driver}")
-            print(f"{nfc_config.driver} NFC reader on COM{nfc_config.com_port} opened.")
-            nfc_config.connected = True
-            return
-        except SerialException:
-            if not serial_error_message:
-                print(f"No {nfc_config.driver} NFC reader detected on COM{nfc_config.com_port}. Waiting until it becomes available.")
-                serial_error_message = True
-            time.sleep(1)
+    com_port = int(nfc_config.com_port)
+    if com_port > 0:
+        while True:
+            try:
+                nfc_config.clf.open(f"com:{nfc_config.com_port}:{nfc_config.driver}")
+                print(f"{nfc_config.driver} NFC reader on COM{nfc_config.com_port} opened.")
+                nfc_config.connected = True
+                return
+            except SerialException:
+                if not serial_error_message:
+                    print(f"No {nfc_config.driver} NFC reader detected on COM{nfc_config.com_port}. Waiting until it becomes available.")
+                    serial_error_message = True
+                time.sleep(1)
+    else:
+        print("Autodetecting NFC reader.")
+        while True:
+            result = nfc_config.clf.open("com")
+            if result and nfc_config.clf.device is not None:
+                print(f"{nfc_config.driver} NFC reader on {nfc_config.clf.device.path} opened.")
+                nfc_config.connected = True
+                return
+            else:
+                time.sleep(1)
 
 
 def main():
@@ -45,8 +57,8 @@ def main():
     except IOError:
         print("nfcread.toml not found.")
         exit(1)
-    except tomllib.TOMLDecodeError:
-        print("Error reading nfcread.toml.")
+    except tomllib.TOMLDecodeError as e:
+        print(f"Error reading nfcread.toml: {e}")
         exit(1)
 
     nfc_config = NFCConfig()
@@ -61,6 +73,9 @@ def main():
     current_tag = None
     command = None
     old_command = None
+    log_new_tags = nfc_toml['reader']['log_new_tags']
+    new_tags_file_write_error = False
+    new_tags = set()
 
     while True:
         try:
@@ -102,6 +117,14 @@ def main():
                         print("Prior tag scanned. Cancelling exit action.")
                         remove_timeout = nfc_config.remove_timeout
                     else:
+                        if log_new_tags and tag_id not in new_tags:
+                            new_tags.add(tag_id)
+                            try:
+                                with open("new_tags.txt","a") as file:
+                                    file.write(tag_id + "\n")
+                            except IOError:
+                                new_tags_file_write_error = True
+                                print("Error writing to new_tags.txt. New tag ID(s) will be written to console when the program exits.")
                         print("No command defined for this tag.")
                         remove_timeout = 0
                 else:
@@ -143,8 +166,18 @@ def main():
             nfc_config.connected = False
             continue
         except KeyboardInterrupt:
-            print("Exiting.")
             break
+
+    if len(new_tags) > 0:
+        if not new_tags_file_write_error:
+            print(f"{len(new_tags)} tag ID(s) written to new_tags.txt.\n")
+        else:
+            print(f"Error writing to new_tags.txt. {len(new_tags)} new tag ID(s) listed below:")
+            for i in new_tags:
+                print(i)
+            
+
+    print("Exiting.")
 
     nfc_config.clf.close()
 
