@@ -22,3 +22,35 @@ log_new_tags = true
 # Comments can be added to identify specific IDs.
 0000000000 = "sample1.bat" # Sample card line
 ffffffffff = "sample2.bat" # Different sample card
+
+[button]
+# This section allows a keyboard key to launch a random command.
+button_enabled = true
+
+# A keyboard key that will be used as a shortcut to immediately execute a 
+# random command.
+# Use a single character, or see the pynput documentation for key codes:
+# https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key
+key = "f16"
+
+# The default behavior is to use all commands in the tag_commands section
+# (whitelist disabled), with filtering from the blacklist_commands below.
+
+# If whitelist mode is enabled, only the commands in the whitelist_commands 
+# will be used. This can be used to allow different commands from the NFC tags.
+whitelist = false
+whitelist_commands = [
+    "command1.bat",
+    "command2.bat",
+    "command3.bat",
+]
+
+# If blacklist mode is enabled, all tag_commands will be used except for 
+# commands that match the blacklist_commands. This can be used to allow all
+# commands except those used for administration or maintenance.
+# The blacklist is not used for filtering the whitelist.
+blacklist = true
+blacklist_commands = [
+    "override.bat",
+    "shutdown.bat",
+]
