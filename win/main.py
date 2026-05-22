@@ -128,14 +128,21 @@ def connect_nfc_reader(nfc_config: NFCConfig, blocking=True):
 
 
 def get_command_path(path, prefix="programs") -> str:
-    """Get the absolute path of a given command.
+    """Get the resolved, absolute path of a given command.
 
     If the path is already absolute, return the same path as a string.
     Otherwise, add the prefix to the path and return that as a string.
     """
 
     p = Path(path)
-    return str(p) if p.is_absolute() else str((Path(prefix) / p).absolute())
+    try:
+        if p.is_absolute():
+            return str(p.resolve(strict=True))
+        else:
+            return str((Path(prefix) / p).resolve(strict=True))
+    except OSError as e:
+        print(f"Error with command {path}: {e}")
+        raise e
 
 
 def start_button_listener(li: LaunchInfo, button_code):
@@ -156,6 +163,58 @@ def start_button_listener(li: LaunchInfo, button_code):
     return listener
 
 
+def update_tags(commands: Commands, exit_on_error=False):
+    try:
+        with open("config.toml", "rb") as config_file:
+            config = tomllib.load(config_file)
+    except IOError:
+        print("Error: config.toml not found.")
+        if exit_on_error:
+            exit(1)
+        return False
+    except tomllib.TOMLDecodeError as e:
+        print(f"Error reading config.toml: {e}")
+        if exit_on_error:
+            exit(1)
+        return False
+    
+    commands.tag_commands = config["tag_commands"]
+    if len(commands.tag_commands) == 0 and config["reader"]["nfc_enabled"]:
+        print("Error: No button commands available.")
+        if exit_on_error:
+            exit(1)
+
+    if config["button"]["whitelist"]:
+        commands.button_commands_src = config["button"]["whitelist_commands"]
+    else:
+        commands.button_commands_src = config["tag_commands"].values()
+    if config["button"]["blacklist"]:
+        button_commands_blacklist = config["button"]["blacklist_commands"]
+        commands.button_commands_src = [
+            i for i in commands.button_commands_src if i not in button_commands_blacklist
+        ]
+    if len(commands.button_commands_src) == 0 and config["button"]["button_enabled"]:
+        print("Error: No button commands available.")
+        if exit_on_error:
+            exit(1)
+        return False
+    commands.reset_button_commands()
+
+    # TODO: Graphical validation.
+    for k,v in commands.tag_commands.items():
+        try:
+            get_command_path(v)
+        except OSError as e:
+            print(f"Error with tag ID {k}: {e}")
+            continue
+
+    for c in commands.button_commands:
+        try:
+            get_command_path(c)
+        except OSError as e:
+            print(f"Error with button command {c}: {e}")
+
+
 def main():
 
     launch_info: LaunchInfo = LaunchInfo()
@@ -170,6 +229,10 @@ def main():
     except tomllib.TOMLDecodeError as e:
         print(f"Error reading config.toml: {e}")
         exit(1)
+        
+    if not config["reader"]["nfc_enabled"] and not config["button"]["button_enabled"]:
+        print("Error: At least one of nfc_enabled or button_enabled in config.toml must be true.")
+        exit(1)
 
     # NFC configuration.
     nfc_enabled = config["reader"]["nfc_enabled"]
@@ -177,7 +240,6 @@ def main():
     nfc_config.com_port = str(config["reader"]["com_port"])
     nfc_config.driver = config["reader"]["driver"]
     nfc_config.remove_timeout = config["reader"]["remove_timeout"]
-    commands.tag_commands = config["tag_commands"]
     log_new_tags = config["reader"]["log_new_tags"]
 
     remove_timeout = 0
@@ -196,19 +258,8 @@ def main():
 
     if button_enabled:
         start_button_listener(launch_info, button_code)
-        if config["button"]["whitelist"]:
-            commands.button_commands_src = config["button"]["whitelist_commands"]
-        else:
-            commands.button_commands_src = config["tag_commands"].values()
-        if config["button"]["blacklist"]:
-            button_commands_blacklist = config["button"]["blacklist_commands"]
-            commands.button_commands_src = [
-                i for i in commands.button_commands_src if i not in button_commands_blacklist
-            ]
-        if len(commands.button_commands_src) == 0:
-            print("Error: No button commands available.")
-            exit(1)
-        commands.reset_button_commands()
+
+    update_tags(commands, exit_on_error=True)
 
     while True:
         try:
