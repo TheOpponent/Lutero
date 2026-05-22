@@ -34,17 +34,25 @@ class LaunchInfo:
     button_last_press_time = time.time()
     "Timestamp for the last time a button press was accepted."
 
-    lock: threading.Lock = threading.Lock()
+    _lock: threading.Lock = threading.Lock()
     "A `threading.Lock` object, to safely access the button variables."
 
     def stop_button_listening(self):
-        with self.lock:
+        with self._lock:
             self.button_listening = False
             self.button_active = False
 
     def start_button_listening(self):
-        with self.lock:
+        with self._lock:
             self.button_listening = True
+
+    def button_press(self):
+        with self._lock:
+            self.button_pressed = True
+
+    def button_release(self):
+        with self._lock:
+            self.button_pressed = False
 
 
 @dataclass
@@ -161,8 +169,7 @@ def start_button_listener(li: LaunchInfo, button_code):
             return
         if key != button_code:
             return
-        with li.lock:
-            li.button_pressed = True
+        li.button_press()
 
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
@@ -275,8 +282,7 @@ def main():
             if button_enabled:
                 if launch_info.button_pressed:
                     print("Button pressed.")
-                    with launch_info.lock:
-                        launch_info.button_pressed = False
+                    launch_info.button_release()
 
                     button_press_time = time.time()
 
