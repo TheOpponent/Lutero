@@ -83,10 +83,17 @@ class Commands:
             self.reset_button_commands()
         return self.button_commands.pop()
 
+    def get_pseudorandom_command(self,id):
+        """Gets a command selected based on the id, a hex string
+        converted to integer.
+        """
+
+        return list(self.tag_commands.values())[int(id,16) % len(self.tag_commands)]
+
 
 def connect_nfc_reader(nfc_config: NFCConfig, blocking=True):
     """Attempt to connect to the NFC reader device.
-    
+
     If the connection fails, sleeps for 1 second.
     If blocking is True, repeat until a connection is established,
     otherwise return False after 1 second.
@@ -177,7 +184,7 @@ def update_tags(commands: Commands, exit_on_error=False):
         if exit_on_error:
             exit(1)
         return False
-    
+
     commands.tag_commands = config["tag_commands"]
     if len(commands.tag_commands) == 0 and config["reader"]["nfc_enabled"]:
         print("Error: No button commands available.")
@@ -229,7 +236,7 @@ def main():
     except tomllib.TOMLDecodeError as e:
         print(f"Error reading config.toml: {e}")
         exit(1)
-        
+
     if not config["reader"]["nfc_enabled"] and not config["button"]["button_enabled"]:
         print("Error: At least one of nfc_enabled or button_enabled in config.toml must be true.")
         exit(1)
@@ -248,6 +255,7 @@ def main():
     old_command = None
     new_tags_file_write_error = False
     new_tags = set()
+    pseudorandom_launch = config["reader"]["launch_pseudorandom_command_on_new_tag"]
 
     # Get button commands list based on whitelist/blacklist settings.
     button_enabled = config["button"]["button_enabled"]
@@ -331,9 +339,18 @@ def main():
                             launch_info.stop_button_listening()
                             current_tag = tag_id
                             command = commands.tag_commands.get(tag_id)
+
+                            # Launch command defined for tag ID if it exists.
                             if command is not None and old_command != command:
                                 remove_timeout = nfc_config.remove_timeout
                                 print(f"Executing command: {command}")
+                            # Launch a pseudorandomly selected command for 
+                            # non-defined tags if enabled.
+                            elif command is None and pseudorandom_launch:
+                                remove_timeout = nfc_config.remove_timeout
+                                command = commands.get_pseudorandom_command(tag_id)
+                                print(f"Executing pseudorandom command for new tag {tag_id}: {command}")
+                            if command is not None and old_command != command:
                                 old_command = command
                                 subprocess.Popen(get_command_path(command), shell=True)
                             elif old_command == command and old_command is not None:
@@ -350,7 +367,9 @@ def main():
                                         print(
                                             "Error writing to new_tags.txt. New tag ID(s) will be written to console when the program exits."
                                         )
-                                print("No command defined for this tag.")
+                                    print(f"Recorded new tag {tag_id} to new_tags.txt.")
+                                elif not pseudorandom_launch:
+                                    print("No command defined for this tag.")
                                 remove_timeout = 0
                         else:
                             print("Unsupported tag scanned.")

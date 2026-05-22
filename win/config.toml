@@ -19,6 +19,13 @@ remove_timeout = 3
 # IDs will be written to the console before exiting.
 log_new_tags = true
 
+# Set to true to launch a pseudorandom command when a scanned tag is not
+# defined in the tag_commands. A hash is calculated from the tag's ID and
+# matched to a command in numeric order, such that the same foreign tag will
+# always launch the same command for a given list of commands. The tag's ID
+# will still be logged if log_new_tags is true.
+launch_pseudorandom_command_on_new_tag = false
+
 [tag_commands]
 # Add keys that match NFC tag IDs with values that contain the command to run.
 # Comments can be added to identify specific IDs.
