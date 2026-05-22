@@ -1,4 +1,6 @@
 [reader]
+nfc_enabled = true
+
 # Set to the COM port number of the reader. Set to 0 to auto detect. Auto 
 # detection is not guaranteed to work and may cause the program to freeze on
 # startup, in which case the actual port number must be provided.
