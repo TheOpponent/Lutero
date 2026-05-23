@@ -42,24 +42,27 @@ button_enabled = true
 # https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key
 key = "f16"
 
-# The default behavior is to use all commands in the tag_commands section
-# (whitelist disabled), with filtering from the blacklist_commands below.
-
+# Button command list mode, one of "whitelist" or "blacklist".
 # If whitelist mode is enabled, only the commands in the whitelist_commands 
 # will be used. This can be used to allow different commands from the NFC tags.
-whitelist = false
+# If blacklist mode is enabled, all tag_commands will be used (ignoring tag 
+# IDs) except for commands that match the blacklist_commands. This can be used 
+# to allow all commands except those used for administration or maintenance.
+# The default is "blacklist".
+button_mode = "blacklist"
+
 whitelist_commands = [
     "command1.bat",
     "command2.bat",
     "command3.bat",
 ]
 
-# If blacklist mode is enabled, all tag_commands will be used except for 
-# commands that match the blacklist_commands. This can be used to allow all
-# commands except those used for administration or maintenance.
-# The blacklist is not used for filtering the whitelist.
-blacklist = true
 blacklist_commands = [
     "override.bat",
     "shutdown.bat",
+]
+
+# If button_mode is blacklist, these commands will be added to the list of
+# commands available with the button press after filtering.
+extra_commands = [
 ]

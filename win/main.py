@@ -98,6 +98,83 @@ class Commands:
 
         return list(self.tag_commands.values())[int(id,16) % len(self.tag_commands)]
 
+    def update_tags(self, exit_on_error=False):
+        """Read config.toml and replace the `button_commands` list.
+        
+        If `exit_on_error` is false, returns `False` on an error 
+        instead of raising an exception.
+        """
+
+        try:
+            with open("config.toml", "rb") as config_file:
+                config = tomllib.load(config_file)
+        except IOError:
+            print("Error: config.toml not found.")
+            if exit_on_error:
+                exit(1)
+            return False
+        except tomllib.TOMLDecodeError as e:
+            print(f"Error reading config.toml: {e}")
+            if exit_on_error:
+                exit(1)
+            return False
+
+        self.tag_commands = config["tag_commands"]
+        if len(self.tag_commands) == 0 and config["reader"]["nfc_enabled"]:
+            print("Error: No button commands available.")
+            if exit_on_error:
+                exit(1)
+
+        if config["button"]["button_mode"] == "whitelist":
+            self.button_commands_src = config["button"]["whitelist_commands"]
+        elif config["button"]["button_mode"] == "blacklist":
+            self.button_commands_src = config["tag_commands"].values()
+            button_commands_blacklist = config["button"]["blacklist_commands"]
+            self.button_commands_src = [
+                i for i in self.button_commands_src if i not in button_commands_blacklist
+            ]
+            self.button_commands_src.extend(config["button"]["extra_commands"])
+        else:
+            print("Error: button_mode must be one of \"whitelist\" or \"blacklist\".")
+            if exit_on_error:
+                exit(1)
+            return False
+        if len(self.button_commands_src) == 0 and config["button"]["button_enabled"]:
+            print("Error: No button commands available.")
+            if exit_on_error:
+                exit(1)
+            return False
+        self.reset_button_commands()
+
+        # TODO: Graphical validation.
+        errors = 0
+        tested_commands = set()
+        if config["reader"]["nfc_enabled"]:
+            for k,v in self.tag_commands.items():
+                try:
+                    tested_commands.add(get_command_path(v))
+                except OSError as e:
+                    print(f"Error with tag ID {k}: {e}")
+                    errors += 1
+                    continue
+
+        if config["button"]["button_enabled"]:
+            for c in self.button_commands:
+                try:
+                    if c not in tested_commands:
+                        tested_commands.add(get_command_path(c))
+                except OSError as e:
+                    print(f"Error with button command {c}: {e}")
+                    errors += 1
+                    continue
+
+        if errors > 0:
+            print(f"{errors} error(s) found in commands.")
+            if exit_on_error:
+                exit(1)
+            return False
+        return True
+
 
 def connect_nfc_reader(nfc_config: NFCConfig, blocking=True):
     """Attempt to connect to the NFC reader device.
@@ -155,10 +232,10 @@ def get_command_path(path, prefix="programs") -> str:
         p = os.path.join(prefix,path)
     if os.path.isfile(p):
         return os.path.abspath(p)
-        else:
+    else:
         print("File not found")
         raise FileNotFoundError
-
+    
 
 def start_button_listener(li: LaunchInfo, button_code):
     """Returns a `pynput` thread that listens for the keyboard shortcut."""
@@ -175,58 +252,6 @@ def start_button_listener(li: LaunchInfo, button_code):
     listener.start()
 
     return listener
-
-
-def update_tags(commands: Commands, exit_on_error=False):
-    try:
-        with open("config.toml", "rb") as config_file:
-            config = tomllib.load(config_file)
-    except IOError:
-        print("Error: config.toml not found.")
-        if exit_on_error:
-            exit(1)
-        return False
-    except tomllib.TOMLDecodeError as e:
-        print(f"Error reading config.toml: {e}")
-        if exit_on_error:
-            exit(1)
-        return False
-
-    commands.tag_commands = config["tag_commands"]
-    if len(commands.tag_commands) == 0 and config["reader"]["nfc_enabled"]:
-        print("Error: No button commands available.")
-        if exit_on_error:
-            exit(1)
-
-    if config["button"]["whitelist"]:
-        commands.button_commands_src = config["button"]["whitelist_commands"]
-    else:
-        commands.button_commands_src = config["tag_commands"].values()
-    if config["button"]["blacklist"]:
-        button_commands_blacklist = config["button"]["blacklist_commands"]
-        commands.button_commands_src = [
-            i for i in commands.button_commands_src if i not in button_commands_blacklist
-        ]
-    if len(commands.button_commands_src) == 0 and config["button"]["button_enabled"]:
-        print("Error: No button commands available.")
-        if exit_on_error:
-            exit(1)
-        return False
-    commands.reset_button_commands()
-
-    # TODO: Graphical validation.
-    for k,v in commands.tag_commands.items():
-        try:
-            get_command_path(v)
-        except OSError as e:
-            print(f"Error with tag ID {k}: {e}")
-            continue
-
-    for c in commands.button_commands:
-        try:
-            get_command_path(c)
-        except OSError as e:
-            print(f"Error with button command {c}: {e}")
 
 
 def main():
@@ -274,7 +299,7 @@ def main():
     if button_enabled:
         start_button_listener(launch_info, button_code)
 
-    update_tags(commands, exit_on_error=True)
+    commands.update_tags(exit_on_error=True)
 
     while True:
         try:
