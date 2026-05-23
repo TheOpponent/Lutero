@@ -4,12 +4,12 @@
 
 # This file is in the public domain (Unlicense). https://unlicense.org
 
+import os
 import random
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 import nfc
@@ -149,15 +149,15 @@ def get_command_path(path, prefix="programs") -> str:
     Otherwise, add the prefix to the path and return that as a string.
     """
 
-    p = Path(path)
-    try:
-        if p.is_absolute():
-            return str(p.resolve(strict=True))
+    if os.path.isabs(path):
+        p = path
+    else:
+        p = os.path.join(prefix,path)
+    if os.path.isfile(p):
+        return os.path.abspath(p)
         else:
-            return str((Path(prefix) / p).resolve(strict=True))
-    except OSError as e:
-        print(f"Error with command {path}: {e}")
-        raise e
+        print("File not found")
+        raise FileNotFoundError
 
 
 def start_button_listener(li: LaunchInfo, button_code):
