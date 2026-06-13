@@ -11,6 +11,7 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
+from collections import deque
 
 import nfc
 import tomllib
@@ -77,31 +78,63 @@ class NFCConfig:
 class Commands:
     """Class for dictionaries and lists of command paths."""
 
-    def __init__(self):
-        self.tag_commands: dict[str,str] = {}
+    def __init__(
+        self, button_commands_history_maxlen=50, button_commands_random_retries=10
+    ):
+        self.tag_commands: dict[str, str] = {}
         self.button_commands_src: list[str] = []
         self.button_commands: list[str] = []
+        if button_commands_history_maxlen > 0:
+            self.button_commands_history = deque(maxlen=button_commands_history_maxlen)
+        else:
+            self.button_commands_history = None
+        self.button_commands_random_retries = button_commands_random_retries
 
     def reset_button_commands(self):
         self.button_commands = self.button_commands_src.copy()
         random.shuffle(self.button_commands)
 
     def get_button_command(self):
+        """Retrieve a button command, attempting to get one not in the
+        history if it's enabled.
+        """
+
         if len(self.button_commands) == 0:
             self.reset_button_commands()
-        return self.button_commands.pop()
 
-    def get_pseudorandom_command(self,id):
+        button_command_candidate = self.button_commands.pop()
+        if self.button_commands_history is not None:
+            retries = self.button_commands_random_retries
+            while retries > 0:
+                if button_command_candidate in self.button_commands_history:
+                    if len(self.button_commands) == 0:
+                        self.reset_button_commands()
+                    button_command_candidate = self.button_commands.pop()
+                    retries -= 1
+                    continue
+                self.button_commands_history.append(button_command_candidate)
+                break
+
+            try:
+                with open("button_commands_history.txt", "w") as file:
+                    for i in self.button_commands_history:
+                        file.write(i + "\n")
+            except IOError as e:
+                print(f"Error writing button_commands_history.txt: {e}")
+
+        return button_command_candidate
+
+    def get_pseudorandom_command(self, id):
         """Gets a command selected based on the id, a hex string
         converted to integer.
         """
 
-        return list(self.tag_commands.values())[int(id,16) % len(self.tag_commands)]
+        return list(self.tag_commands.values())[int(id, 16) % len(self.tag_commands)]
 
     def update_tags(self, exit_on_error=False):
         """Read config.toml and replace the `button_commands` list.
-        
-        If `exit_on_error` is false, returns `False` on an error 
+
+        If `exit_on_error` is false, returns `False` on an error
         instead of raising an exception.
         """
 
@@ -131,11 +164,13 @@ class Commands:
             self.button_commands_src = config["tag_commands"].values()
             button_commands_blacklist = config["button"]["blacklist_commands"]
             self.button_commands_src = [
-                i for i in self.button_commands_src if i not in button_commands_blacklist
+                i
+                for i in self.button_commands_src
+                if i not in button_commands_blacklist
             ]
             self.button_commands_src.extend(config["button"]["extra_commands"])
         else:
-            print("Error: button_mode must be one of \"whitelist\" or \"blacklist\".")
+            print('Error: button_mode must be one of "whitelist" or "blacklist".')
             if exit_on_error:
                 exit(1)
             return False
@@ -150,7 +185,7 @@ class Commands:
         errors = 0
         tested_commands = set()
         if config["reader"]["nfc_enabled"]:
-            for k,v in self.tag_commands.items():
+            for k, v in self.tag_commands.items():
                 try:
                     tested_commands.add(get_command_path(v))
                 except OSError as e:
@@ -229,13 +264,13 @@ def get_command_path(path, prefix="programs") -> str:
     if os.path.isabs(path):
         p = path
     else:
-        p = os.path.join(prefix,path)
+        p = os.path.join(prefix, path)
     if os.path.isfile(p):
         return os.path.abspath(p)
     else:
         print("File not found")
         raise FileNotFoundError
-    
+
 
 def start_button_listener(li: LaunchInfo, button_code):
     """Returns a `pynput` thread that listens for the keyboard shortcut."""
@@ -255,10 +290,6 @@ def start_button_listener(li: LaunchInfo, button_code):
 
 
 def main():
-
-    launch_info: LaunchInfo = LaunchInfo()
-    commands = Commands()
-
     try:
         with open("config.toml", "rb") as config_file:
             config = tomllib.load(config_file)
@@ -270,8 +301,12 @@ def main():
         exit(1)
 
     if not config["reader"]["nfc_enabled"] and not config["button"]["button_enabled"]:
-        print("Error: At least one of nfc_enabled or button_enabled in config.toml must be true.")
+        print(
+            "Error: At least one of nfc_enabled or button_enabled in config.toml must be true."
+        )
         exit(1)
+
+    launch_info: LaunchInfo = LaunchInfo()
 
     # NFC configuration.
     nfc_enabled = config["reader"]["nfc_enabled"]
@@ -296,8 +331,24 @@ def main():
     except KeyError:
         button_code = keyboard.KeyCode.from_char(config["button"]["key"])
 
+    commands = Commands(
+        button_commands_history_maxlen=config["button"]["button_commands_history"],
+        button_commands_random_retries=config["button"][
+            "button_commands_random_retries"
+        ],
+    )
+
     if button_enabled:
         start_button_listener(launch_info, button_code)
+        if commands.button_commands_history is not None:
+            # Initialize saved button launch history.
+            try:
+                with open("button_commands_history.txt", "r") as file:
+                    for line in file:
+                        commands.button_commands_history.append(line.rstrip('\n'))
+            except IOError as e:
+                print(f"Error reading buttons_commands_history.txt: {e}")
+                print("Using empty button commands history.")
 
     commands.update_tags(exit_on_error=True)
 
@@ -316,7 +367,9 @@ def main():
                     if not launch_info.button_active and (
                         button_press_time - launch_info.button_last_press_time > 2
                     ):
-                        subprocess.Popen(get_command_path(commands.get_button_command()), shell=True)
+                        subprocess.Popen(
+                            get_command_path(commands.get_button_command()), shell=True
+                        )
                         launch_info.button_active = True
                         launch_info.button_last_press_time = button_press_time
                     elif launch_info.button_active and (
@@ -343,9 +396,14 @@ def main():
                     # allows the button to still be polled during this process,
                     # albeit with a 1-second lag.
                     if not nfc_config.connected:
-                        connect_nfc_reader(nfc_config, blocking=True if nfc_config.connected is None else False)
+                        connect_nfc_reader(
+                            nfc_config,
+                            blocking=True if nfc_config.connected is None else False,
+                        )
 
-                    target = nfc_config.clf.sense(nfc.clf.RemoteTarget("106A"), iterations=1)
+                    target = nfc_config.clf.sense(
+                        nfc.clf.RemoteTarget("106A"), iterations=1
+                    )
                     if target:
                         if hasattr(target, "sdd_res"):
                             print(f"Tag scanned. ID: {target.sdd_res.hex()}")
@@ -375,12 +433,14 @@ def main():
                             if command is not None and old_command != command:
                                 remove_timeout = nfc_config.remove_timeout
                                 print(f"Executing command: {command}")
-                            # Launch a pseudorandomly selected command for 
+                            # Launch a pseudorandomly selected command for
                             # non-defined tags if enabled.
                             elif command is None and pseudorandom_launch:
                                 remove_timeout = nfc_config.remove_timeout
                                 command = commands.get_pseudorandom_command(tag_id)
-                                print(f"Executing pseudorandom command for new tag {tag_id}: {command}")
+                                print(
+                                    f"Executing pseudorandom command for new tag {tag_id}: {command}"
+                                )
                             if command is not None and old_command != command:
                                 old_command = command
                                 subprocess.Popen(get_command_path(command), shell=True)
@@ -406,7 +466,9 @@ def main():
                             print("Unsupported tag scanned.")
 
                         # Idle while tag is present.
-                        while nfc_config.clf.sense(nfc.clf.RemoteTarget("106A"), iterations=1):
+                        while nfc_config.clf.sense(
+                            nfc.clf.RemoteTarget("106A"), iterations=1
+                        ):
                             pass
                     else:
                         if current_tag is not None:
@@ -420,7 +482,9 @@ def main():
                                     remove_timeout -= 1
                                     time.sleep(1)
                                 else:
-                                    exit_action = subprocess.Popen("exit.bat", shell=True)
+                                    exit_action = subprocess.Popen(
+                                        "exit.bat", shell=True
+                                    )
                                     while True:
                                         try:
                                             exit_action.wait(timeout=3)

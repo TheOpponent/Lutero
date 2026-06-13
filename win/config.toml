@@ -66,3 +66,15 @@ blacklist_commands = [
 # commands available with the button press after filtering.
 extra_commands = [
 ]
+
+# Attempt to pick unique commands by maintaining a history of previously
+# launched commands, limited to this number of commands. Before launching
+# a randomly selected command, the history is scanned for the same command.
+# If the command is in the history, another randomly selected command will
+# be tried, up to the number of retries set below, after which the next
+# random command is launched unconditionally.
+# The text file button_commands_history.txt is used for this history. It will
+# be created if it does not exist.
+# Set button_commands_history to 0 to disable.
+button_commands_history = 50
+button_commands_random_retries = 10
