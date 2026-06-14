@@ -103,10 +103,14 @@ class Commands:
             self.reset_button_commands()
 
         button_command_candidate = self.button_commands.pop()
+
+        # If the history is enabled, retry if the popped item is in the history.
         if self.button_commands_history is not None:
             retries = self.button_commands_random_retries
+            rejected_entries = []
             while retries > 0:
                 if button_command_candidate in self.button_commands_history:
+                    rejected_entries.append(button_command_candidate)
                     if len(self.button_commands) == 0:
                         self.reset_button_commands()
                     button_command_candidate = self.button_commands.pop()
@@ -114,6 +118,12 @@ class Commands:
                     continue
                 self.button_commands_history.append(button_command_candidate)
                 break
+
+            # Push anything that got rejected back into the button_commands 
+            # list and reshuffle.
+            if len(rejected_entries) > 0:
+                self.button_commands.extend(rejected_entries)
+                random.shuffle(self.button_commands)
 
             try:
                 with open("button_commands_history.txt", "w") as file:
