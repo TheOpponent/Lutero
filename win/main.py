@@ -1,22 +1,28 @@
+# Lutero, a monitor program to launch commands via physical methods.
+# Lutero is in the public domain (Unlicense). https://unlicense.org
+
 # Uses nfcpy to drive an NFC tag reader to continuously scan for
 # supported tags and launch an associated command, and pynput to
 # monitor keyboard input to launch randomly selected commands.
 
-# This file is in the public domain (Unlicense). https://unlicense.org
 
+import ctypes
 import os
 import random
 import subprocess
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Optional
-from collections import deque
 
 import nfc
 import tomllib
 from pynput import keyboard
 from serial import SerialException
+
+
+kbd = keyboard.Controller()
 
 
 @dataclass
@@ -46,7 +52,7 @@ class LaunchInfo:
     def start_button_listening(self):
         with self._lock:
             self.button_listening = True
-
+            
     def button_press(self):
         with self._lock:
             self.button_pressed = True
@@ -119,7 +125,7 @@ class Commands:
                 self.button_commands_history.append(button_command_candidate)
                 break
 
-            # Push anything that got rejected back into the button_commands 
+            # Push anything that got rejected back into the button_commands
             # list and reshuffle.
             if len(rejected_entries) > 0:
                 self.button_commands.extend(rejected_entries)
@@ -299,6 +305,21 @@ def start_button_listener(li: LaunchInfo, button_code):
     return listener
 
 
+def set_scroll_lock(enable: bool, delay: float=0.0):
+    scroll_lock_status = bool(ctypes.WinDLL("User32.dll").GetKeyState(0x91) & 1)
+
+    if scroll_lock_status == enable:
+        return
+
+    def _toggle():
+        kbd.press(keyboard.Key.scroll_lock)
+        kbd.release(keyboard.Key.scroll_lock)
+
+    timer = threading.Timer(delay, _toggle)
+    timer.daemon = True
+    timer.start()
+
+
 def main():
     try:
         with open("config.toml", "rb") as config_file:
@@ -347,15 +368,17 @@ def main():
             "button_commands_random_retries"
         ],
     )
-
+    use_scroll_lock = config["button"]["button_use_scroll_lock"]
     if button_enabled:
+        if use_scroll_lock:
+            set_scroll_lock(True)
         start_button_listener(launch_info, button_code)
         if commands.button_commands_history is not None:
             # Initialize saved button launch history.
             try:
                 with open("button_commands_history.txt", "r") as file:
                     for line in file:
-                        commands.button_commands_history.append(line.rstrip('\n'))
+                        commands.button_commands_history.append(line.rstrip("\n"))
             except IOError as e:
                 print(f"Error reading buttons_commands_history.txt: {e}")
                 print("Using empty button commands history.")
@@ -380,6 +403,8 @@ def main():
                         subprocess.Popen(
                             get_command_path(commands.get_button_command()), shell=True
                         )
+                        if use_scroll_lock:
+                            set_scroll_lock(False)
                         launch_info.button_active = True
                         launch_info.button_last_press_time = button_press_time
                     elif launch_info.button_active and (
@@ -393,7 +418,8 @@ def main():
                             except TimeoutError:
                                 print("Exit action timed out. Retrying.")
                                 continue
-
+                        if use_scroll_lock:
+                            set_scroll_lock(True,1.99)
                         launch_info.button_active = False
                         launch_info.button_last_press_time = button_press_time
 
@@ -436,6 +462,8 @@ def main():
                                         continue
                                 time.sleep(1)
                             launch_info.stop_button_listening()
+                            if use_scroll_lock:
+                                set_scroll_lock(False)
                             current_tag = tag_id
                             command = commands.tag_commands.get(tag_id)
 
@@ -506,6 +534,8 @@ def main():
                                     command = None
                                     old_command = None
                                     launch_info.start_button_listening()
+                                    if use_scroll_lock:
+                                        set_scroll_lock(True)
                             else:
                                 print("Tag removed.")
                                 current_tag = None
@@ -532,6 +562,8 @@ def main():
                 for i in new_tags:
                     print(i)
 
+    if use_scroll_lock:
+        set_scroll_lock(False)
     print("Exiting.")
 
 

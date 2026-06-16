@@ -37,7 +37,7 @@ ffffffffff = "sample2.bat" # Different sample card
 button_enabled = true
 
 # A keyboard key that will be used as a shortcut to immediately execute a 
-# random command.
+# random command, and later exit that command.
 # Use a single character, or see the pynput documentation for key codes:
 # https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key
 key = "f16"
@@ -78,3 +78,12 @@ extra_commands = [
 # Set button_commands_history to 0 to disable.
 button_commands_history = 50
 button_commands_random_retries = 10
+
+# The Scroll Lock light can be used to indicate if a command can be launched 
+# with the button. It will turn on when no command is active and and turn off
+# when the button is pressed, as the command launches. It will also turn off
+# when a NFC tag is used to launch a command to indicate that the button is
+# temporarily disabled, until the tag is removed.
+# Enabling this is not recommended if any programs you run depend on the status
+# of Scroll Lock.
+button_use_scroll_lock = false
