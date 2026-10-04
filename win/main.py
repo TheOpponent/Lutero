@@ -552,7 +552,7 @@ def main():
                     continue
 
             time.sleep(0.01)
-            
+
         except KeyboardInterrupt:
             break
 

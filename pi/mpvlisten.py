@@ -4,10 +4,10 @@
 # Part of Lutero. https://github.com/TheOpponent/Lutero
 # This file is in the public domain (Unlicense). https://unlicense.org
 
-# Runs on a Raspberry Pi or similar device running mpv acting as digital
-# signage, to drive the currently displayed media using MQTT messages on the
-# "lutero/sign" topic. While the script is written for Linux, it can be adapted
-# for any platform that supports mpv and mpvsocket.
+# Runs on a Raspberry Pi or similar low-power device running mpv acting as 
+# digital signage, to drive the currently displayed media using MQTT messages 
+# on the "lutero/sign" topic. While the script is written for Linux, it can be 
+# adapted for any platform that supports mpv and mpvsocket.
 # This script runs at boot connects to a Unix socket created by
 # mpv --input-ipc-server=/tmp/mpvsocket.
 # It assumes the MQTT broker is on the same local network and accepts anonymous
@@ -29,7 +29,7 @@ import paho.mqtt.client as paho
 
 # Set to the IP of the PC running the MQTT broker. Ideally this will be the
 # same PC running the games, with the listener setting bound to the IP of the
-# NIC (not localhost) connected to the digital sign or hub.
+# NIC connected to the digital sign or hub.
 BROKER_IP = "192.168.19.1"
 BROKER_PORT = 1883
 

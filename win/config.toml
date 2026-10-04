@@ -50,6 +50,9 @@ key = "f16"
 # If blacklist mode is enabled, all tag_commands will be used (ignoring tag 
 # IDs) except for commands that match the blacklist_commands. This can be used 
 # to allow all commands except those used for administration or maintenance.
+# To use the button to launch a single command, such as a frontend, set 
+# button_mode to "whitelist", insert only one command in whitelist_commands,
+# and set button_commands_history below to 0.
 # The default is "blacklist".
 button_mode = "blacklist"
 
