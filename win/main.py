@@ -382,7 +382,7 @@ def main():
                 print(f"Error reading buttons_commands_history.txt: {e}")
                 print("Using empty button commands history.")
 
-    commands.update_tags(exit_on_error=True)
+        commands.update_tags(exit_on_error=True)
 
     while True:
         try:
