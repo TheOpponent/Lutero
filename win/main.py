@@ -14,12 +14,12 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
 import nfc
-import tomllib
 from pynput import keyboard
 from serial import SerialException
 
