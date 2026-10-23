@@ -1,9 +1,0 @@
-libusb1==3.3.1
-ndeflib==0.3.3
-nfcpy==1.0.4
-paho-mqtt==2.1.0
-pyDes==2.0.1
-pyglet==2.1.16
-pynput==1.8.2
-pyserial==3.5
-six==1.17.0
